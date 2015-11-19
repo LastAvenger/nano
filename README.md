@@ -6,7 +6,7 @@ Nano
 ## BASIC
 - [x] 登录
 - [x] 发帖
-- [ ] 回帖
+- [x] 回帖
 - [ ] 看帖
 
 ## FEATURE
