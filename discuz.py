@@ -2,17 +2,21 @@ import re
 import requests
 
 class Discuz():
-    fid = {
-            "海洋馆": "7",
-            "IT数码": "10",
-            "论坛测试区": "41",
-            "论坛站务": "39"
-            }
-
+        
     def __init__(self, url):
         self.url = url
         self.s = requests.session()
         self.logined = False
+
+    def get_fid(self):
+        fid_pattern = re.compile(r'<dt><a href="forum\.php\?mod=forumdisplay&fid=([0-9]+)">(?u)(.+)</a>')
+        response = self.s.get(self.url + 'bbs/')
+        self.fid = fid_pattern.findall(response.text)
+        for i in self.fid: i = lambda x: (x[1], x[0])
+
+        print('[get_fid]', 'fid got')
+        print(self.fid)
+
 
     def get_formhash(self, url):
         formhash_pattern = re.compile('formhash=([0-9a-zA-Z]+)')
@@ -25,15 +29,17 @@ class Discuz():
 
     def login(self, usr):
         action = 'bbs/member.php?mod=logging&action=login&loginsubmit=yes'
-        succ_pattern = re.compile(r"\('succeedlocation'\).innerHTML = '(?u)(.+)，现在将转入登录前页面';")
+        succ_pattern = re.compile(r"\('succeedlocation'\)\.innerHTML = '(?u)(.+)，现在将转入登录前页面';")
         fail_pattern = re.compile(r'<div id="messagetext" class="alert_error">\n<p>(?u)(.+)</p>')
 
         response = self.s.post(self.url + action, data = usr)
         succ_info = succ_pattern.search(response.text)
         fail_info = fail_pattern.search(response.text)
 
+
         if succ_info:
             print('[login]','{successed}', succ_info.group(1))
+            get_fid()
             self.logined = True
         elif fail_info:
             print('[login]', '{failed}', fail_info.group(1))
