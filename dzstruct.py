@@ -4,11 +4,13 @@ class Reply():
     author = ''
     time = ''
     message = ''
+    uid = ''
 
-    def __init__(self, author, time, message): 
+    def __init__(self, author, time, message, uid = ''): 
         self.author = author
         self.time = time
         self.message = message
+        self.uid = uid
 
 class Post():
     tid = ''
