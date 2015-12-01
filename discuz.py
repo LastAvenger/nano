@@ -22,10 +22,11 @@ class Discuz():
         fid_pattern = re.compile(r'<dt><a href="forum\.php\?mod=forumdisplay&fid=([0-9]+)">(?u)(.+)</a>')
         response = self.s.get(self.url + 'bbs/')
         self.fid = fid_pattern.findall(response.text)
-        for i in self.fid: i = lambda x: (x[1], x[0])
-
-        print('[get_fid]', 'fid got')
-        print(self.fid)
+        if self.fid:
+            for i in self.fid: i = lambda x: (x[1], x[0])
+            print('[get_fid]', '{successed}')
+        else:
+            print('[get_fid]', '{unknown error}')
 
     def get_formhash(self, url):
         formhash_pattern = re.compile('formhash=([0-9a-zA-Z]+)')
@@ -120,29 +121,37 @@ class Discuz():
     def get_post(self, tid):
         action = 'bbs/forum.php?mod=viewthread&action=printable&tid=TID'.replace('TID', tid)
 
+        fail_pattern = re.compile('<div id="messagetext" class="alert_error">\n<p>(?u)(.+)</p>')
         post_pattern = re.compile(
-          r'<b>作者: </b>(?u)(.+)&nbsp; &nbsp; <b>时间: </b>(.+)<br />\n<b>标题: </b>(?u)(.+)<br />((.|\n)*?)<hr noshade size="2" width="100%" color="#808080">')
-
+          r'<b>作者: </b>(?u)(.+)&nbsp; &nbsp; <b>时间: </b>(.+)<br />\n<b>标题: </b>(?u)(.+)<br />((.|\n)*?)<hr noshade size="2" width="100%" color="(#808080|BORDERCOLOR)">')
         reply_pattern = re.compile(
           r'<b>作者: </b>(?u)(.+)&nbsp; &nbsp; <b>时间: </b>(.+)<br />\n(?u)((.|\n)*?)<hr noshade size="2" width="100%" color="(#808080|BORDERCOLOR)">')
 
         response = self.s.get(self.url + action)
         text = response.text.replace('\r', '')
 
+        fail_info = fail_pattern.search(text)
         post_info = post_pattern.search(text)
         reply_info = reply_pattern.findall(text)
 
-        post = dzstruct.Post()
-        post.tid = tid
-        post.author = post_info.group(1)
-        post.time = post_info.group(2)
-        post.subject = post_info.group(3)
-        post.message = post_info.group(4)
-        post.num_replies = len(reply_info)
+        if post_info:
+            print('[get_post]', '{successed}')
 
-        for i in reply_info:
-            post.replies.append(dzstruct.Reply(i[0], i[1], i[2]))
-    
-        post.display(display_relpy = True, pure = True)
-        return post
+            post = dzstruct.Post()
+            post.tid = tid
+            post.author = post_info.group(1)
+            post.time = post_info.group(2)
+            post.subject = post_info.group(3)
+            post.message = post_info.group(4)
+            post.num_replies = len(reply_info)
 
+            if reply_info:
+                for i in reply_info:
+                    post.replies.append(dzstruct.Reply(i[0], i[1], i[2]))
+            post.display(display_relpy = True, pure = True)
+        elif fail_info:
+            print('[get_post]', '{failed}', fail_info.group(1))
+        else:
+            print('[get_post]', '{unknown error}')
+        return None
+        
