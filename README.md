@@ -1,15 +1,20 @@
 Nano
 =========
-![nano-is-no-a-bot](./nano-is-no-a-bot.jpg)
+<img src="nano-is-no-a-bot.jpg" width="50%">
 
-# TODO
-## BASIC
-- [x] 登录
-- [x] 发帖
-- [x] 回帖
-- [ ] 看帖
+## REQUIREMENTS
+* Python >= 3
+* Requests
+* BeautifulSoup4
 
-## FEATURE
+## TODO
+### BASIC
+- [x] login
+- [x] post
+- [x] reply
+- [ ] get post
+
+### FEATURE
 - [ ] 菠菜通知
 - [ ] 水量统计
 - [ ] 校园通知
