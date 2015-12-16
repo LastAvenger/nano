@@ -1,47 +1,42 @@
-import re
-
-class Reply():
+class Post():
+    pid = ''
+    uid = ''
     author = ''
     time = ''
+    title = ''
     message = ''
-    uid = ''
 
-    def __init__(self, author, time, message, uid = ''): 
+    def __init__(self, pid, uid, author, time, message, title = ''): 
+        self.uid = uid
+        self.pid = pid
         self.author = author
         self.time = time
+        self.title = title
         self.message = message
-        self.uid = uid
 
-class Post():
+class Thread():
     tid = ''
-    author = ''
-    time = ''
-    subject = ''
-    message = ''
-    replies = []
-    num_replies = 0
+    fid = ''
+    title = ''
+    nposts = 0
+    posts = []
 
-    def __init__(self): 
-        pass
+    def __init__(self, tid, fid, title, nreplies): 
+        self.tid = tid;
+        self.fid = fid;
+        self.title = title
+        self.nposts = nreplies;
 
-    def display(self, display_relpy = False, pure = False):
-        print('TID:', self.tid, 'Author:', self.author, 'Time:', self.time)
-        print('Subject:', self.subject)
-        print('Replies number:', self.num_replies)
+    def disp(self):
+        print('TID:', self.tid, 'FID', self.fid, 'Author:', self.posts[0].author, 'Time:', self.posts[0].time)
+        print('Title:', self.title)
+        print('Replies number:', self.nposts)
         print('---------- Message ----------')
-        if pure:
-            dr = re.compile(r'<[^>]+>', re.S)
-            print(dr.sub('', self.message))
-        else:
-            print(self.message)
+        print(self.posts[0].message)
 
-        if display_relpy:
-            for r in self.replies:
-                print('-----------------------------')
-                print(r.author, 'reply at', r.time)
-                if pure:
-                    print(dr.sub('', r.message))
-                else:
-                    print(r.message)
+        for p in self.posts[1:]:
+            print('-----------------------------')
+            print(p.author, '发表于', p.time)
+            print(p.message)
 
         print('----------   End   ----------')

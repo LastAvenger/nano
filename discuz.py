@@ -1,13 +1,17 @@
 import re
 import json
 import requests
-import dzstruct
+
+from dzstruct import Post
+from dzstruct import Thread
+from bs4 import BeautifulSoup
 
 class Discuz():
-    url = ''
     s = ''
+    url = ''
+    fid = {}        # 版块名称 和 ID 的映射
+    dzconfig = ''   # post & reply param
     logined = False
-    dzconfig = ''    # post & reply param
         
     def __init__(self, url):
         self.url = url
@@ -21,9 +25,9 @@ class Discuz():
     def get_fid(self):
         fid_pattern = re.compile(r'<dt><a href="forum\.php\?mod=forumdisplay&fid=([0-9]+)">(?u)(.+)</a>')
         response = self.s.get(self.url + 'bbs/')
-        self.fid = fid_pattern.findall(response.text)
-        if self.fid:
-            for i in self.fid: i = lambda x: (x[1], x[0])
+        t = fid_pattern.findall(response.text)
+        if t:
+            self.fid = dict((fname, fid) for fid, fname in t)
             print('[get_fid]', '{successed}')
         else:
             print('[get_fid]', '{unknown error}')
@@ -53,6 +57,7 @@ class Discuz():
         if succ_info:
             print('[login]','{successed}', succ_info.group(1))
             self.get_fid()
+            print(self.fid)
             self.logined = True
         elif fail_info:
             print('[login]', '{failed}', fail_info.group(1))
@@ -70,7 +75,7 @@ class Discuz():
         tid = None
         fail_pattern = re.compile('<div id="messagetext" class="alert_error">\n<p>(?u)(.+)</p>')
         succ_pattern = re.compile('tid=([0-9]+)')
-        action = 'bbs/forum.php?mod=post&action=newthread&fid=FID&extra=&topicsubmit=yes'.replace('FID', self.fid[fname])
+        action = 'bbs/forum.php?mod=post&action=newthread&fid=FID&topicsubmit=yes'.replace('FID', self.fid[fname])
         fake = 'bbs/forum.php?mod=post&action=newthread&fid=FID'.replace('FID', self.fid[fname])
 
         arg = self.dzconfig['post']
@@ -94,20 +99,22 @@ class Discuz():
             print('[post]', '{unknown error}')
         return tid
 
-    def reply(self, id, message):
+    def reply(self, tid, message):
         if not self.logined: 
             print('[post]', 'not logged in')
             return False
 
-        action = '/bbs/forum.php?mod=post&action=reply&tid=TID&extra=&replysubmit=yes&infloat=yes&handlekey=fastpost&inajax=1'.replace('TID', tid)
+        action = '/bbs/forum.php?mod=post&action=reply&tid=TID&replysubmit=yes'.replace('TID', tid)
         fake = '/bbs/forum.php?mod=viewthread&tid=865411'
         fail_pattern = re.compile("errorhandle_fastpost\('(?u)(.+?)'")
         succ_pattern = re.compile('pid=([0-9]+)')
+        # TODO 这里并不能匹配到最后一次发表的 PID
 
-        arg['formhash'] = self.get_formhash(url + fake)
+        arg = self.dzconfig['post']
+        arg['formhash'] = self.get_formhash(self.url + fake)
         arg['message'] = message.encode('gb2312')
 
-        response = s.post(self.url + action, data = arg)
+        response = self.s.post(self.url + action, data = arg)
         fail_info = fail_pattern.search(response.text)
         succ_info = succ_pattern.search(response.text)
 
@@ -119,38 +126,41 @@ class Discuz():
             print('[reply]', '{unknown error}')
 
     def get_post(self, tid):
-        action = 'bbs/forum.php?mod=viewthread&action=printable&tid=TID'.replace('TID', tid)
-
-        fail_pattern = re.compile('<div id="messagetext" class="alert_error">\n<p>(?u)(.+)</p>')
-        post_pattern = re.compile(
-          r'<b>作者: </b>(?u)(.+)&nbsp; &nbsp; <b>时间: </b>(.+)<br />\n<b>标题: </b>(?u)(.+)<br />((.|\n)*?)<hr noshade size="2" width="100%" color="(#808080|BORDERCOLOR)">')
-        reply_pattern = re.compile(
-          r'<b>作者: </b>(?u)(.+)&nbsp; &nbsp; <b>时间: </b>(.+)<br />\n(?u)((.|\n)*?)<hr noshade size="2" width="100%" color="(#808080|BORDERCOLOR)">')
+        action = 'bbs/forum.php?mod=viewthread&tid=TID'.replace('TID', tid)
 
         response = self.s.get(self.url + action)
-        text = response.text.replace('\r', '')
+        html = BeautifulSoup(response.text, 'html.parser')
+        # html = BeautifulSoup(open('./test.html').read(), 'html.parser')
 
-        fail_info = fail_pattern.search(text)
-        post_info = post_pattern.search(text)
-        reply_info = reply_pattern.findall(text)
+        fail_info = html.find(id = 'messagetext', class_ = 'alert_error')
+        posts = html.find_all('div', id = re.compile('post_[0-9]+'))
 
-        if post_info:
+        if posts:
             print('[get_post]', '{successed}')
 
-            post = dzstruct.Post()
-            post.tid = tid
-            post.author = post_info.group(1)
-            post.time = post_info.group(2)
-            post.subject = post_info.group(3)
-            post.message = post_info.group(4)
-            post.num_replies = len(reply_info)
+            title = html.find('span', id = 'thread_subject').string
+            f_tag = html.find('a', href = re.compile(r'^forum.php\?mod=forumdisplay&fid=[0-9]+'))
+            fid = re.search(r'fid=([0-9]+)', f_tag['href']).group(1)
 
-            if reply_info:
-                for i in reply_info:
-                    post.replies.append(dzstruct.Reply(i[0], i[1], i[2]))
-            post.display(display_relpy = True, pure = True)
+            thread = Thread(tid, fid, title, len(posts) - 1)
+
+            for post in posts:
+                lock_info = post.find('div', class_ = 'locked')
+                if (lock_info):
+                    continue
+                author = post.find('a', class_='xw1').get_text()
+                uid = re.search(r'uid=([0-9]+)', post.find('a', class_='xw1')['href']).group(1)
+                pid = re.search(r'post_([0-9]+)', post['id']).group(1)
+                time = post.find('em', id = re.compile(r'authorposton[0-9]')).string[4:]    # strip "发表于 "
+
+                post.find('div', class_ = 'a_pr').decompose()   # 删除 分享栏
+                message = post.find('td', id = re.compile(r'postmessage_[0-9]+')).get_text()
+
+                thread.posts.append(Post(pid, uid, author, time, message))
+
+            thread.disp()
         elif fail_info:
-            print('[get_post]', '{failed}', fail_info.group(1))
+            print('[get_post]', '{failed}', fail_info.p.get_text())
         else:
             print('[get_post]', '{unknown error}')
         return None
