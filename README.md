@@ -12,7 +12,7 @@ Nano
 - [x] login
 - [x] post
 - [x] reply
-- [ ] get post
+- [x] get post
 
 ### FEATURE
 - [ ] 菠菜通知

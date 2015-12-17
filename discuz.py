@@ -22,6 +22,7 @@ class Discuz():
         self.dzconfig = json.loads(f.read())
         f.close()
 
+
     def get_fid(self):
         fid_pattern = re.compile(r'<dt><a href="forum\.php\?mod=forumdisplay&fid=([0-9]+)">(?u)(.+)</a>')
         response = self.s.get(self.url + 'bbs/')
@@ -32,6 +33,7 @@ class Discuz():
         else:
             print('[get_fid]', '{unknown error}')
 
+
     def get_formhash(self, url):
         formhash_pattern = re.compile('formhash=([0-9a-zA-Z]+)')
         response = self.s.get(url)
@@ -40,6 +42,7 @@ class Discuz():
             return formhash_info.group(1)
         else:
             return None
+
 
     def login(self, usr):
         action = 'bbs/member.php?mod=logging&action=login&loginsubmit=yes'
@@ -99,6 +102,7 @@ class Discuz():
             print('[post]', '{unknown error}')
         return tid
 
+
     def reply(self, tid, message):
         if not self.logined: 
             print('[post]', 'not logged in')
@@ -125,7 +129,63 @@ class Discuz():
         else:
             print('[reply]', '{unknown error}')
 
-    def get_post(self, tid):
+
+    def get_post(self, thread, page):
+        action = 'bbs/forum.php?mod=viewthread&tid=TID&page=PAGE'.replace('TID', thread.tid).replace('PAGE', str(page))
+
+        response = self.s.get(self.url + action)
+        html = BeautifulSoup(response.text, 'html.parser')
+
+        fail_info = html.find(id = 'messagetext', class_ = 'alert_error')
+        posts = html.find_all('div', id = re.compile(r'post_[0-9]+'))
+
+        idx = len(thread.posts)
+
+        if posts:
+            for post in posts:
+                idx = idx + 1
+
+                author = post.find('a', class_='xw1')
+                if author:
+                    author = author.get_text()
+                    uid = re.search(r'uid=([0-9]+)', post.find('a', class_='xw1')['href']).group(1)
+                else:
+                    author = 'anonymous'
+                    uid = '0'
+
+                pid = re.search(r'post_([0-9]+)', post['id']).group(1)
+
+                time = post.find('em', id = re.compile(r'authorposton[0-9]+'))
+                if time.span:
+                    # <em id="authorposton6700972">发表于 <span title="2015-12-17 11:31:03">1 小时前</span></em>
+                    time = time.span['title']
+                else:
+                    # <em id="authorposton6619277">发表于 2015-9-21 08:47:50</em>
+                    time = time.string[4:]
+
+                lock_info = post.find('div', class_ = 'locked')
+                if (lock_info):
+                    print('[get_post]', '{warning}', 'page:', page, 'idx:', idx, 'post locked')
+                    message = '作者被禁止或删除 内容自动屏蔽'
+                else:
+                    post.find('div', class_ = 'a_pr').decompose()   # 删除 分享栏
+                    message = post.find('td', id = re.compile(r'postmessage_[0-9]+')).get_text()
+                    # print(idx, end = ' ')
+
+                thread.posts.append(Post(pid, uid, author, time, message))
+
+            # print('')
+            print('[get_post]', '{successed}', 'page:', page, 'posts_num:', len(posts))
+            return True
+        elif fail_info:
+            print('[get_post]', '{failed}', 'page:', page, fail_info.p.get_text())
+        else:
+            print('[get_post]', '{unknown error}', 'page:', page)
+
+        return False
+
+
+    def get_thread(self, tid):
         action = 'bbs/forum.php?mod=viewthread&tid=TID'.replace('TID', tid)
 
         response = self.s.get(self.url + action)
@@ -133,35 +193,26 @@ class Discuz():
         # html = BeautifulSoup(open('./test.html').read(), 'html.parser')
 
         fail_info = html.find(id = 'messagetext', class_ = 'alert_error')
-        posts = html.find_all('div', id = re.compile('post_[0-9]+'))
+        if fail_info:
+            print('[get_thread]', '{failed}', fail_info.p.get_text())
+            return None
 
-        if posts:
-            print('[get_post]', '{successed}')
+        title = html.find('span', id = 'thread_subject').string
+        f_tag = html.find('a', href = re.compile(r'^forum.php\?mod=forumdisplay&fid=[0-9]+'))
+        fid = re.search(r'fid=([0-9]+)', f_tag['href']).group(1)
+        npages = int(html.find('span', title = re.compile('共 [0-9]+ 页'))['title'][2:-2])
 
-            title = html.find('span', id = 'thread_subject').string
-            f_tag = html.find('a', href = re.compile(r'^forum.php\?mod=forumdisplay&fid=[0-9]+'))
-            fid = re.search(r'fid=([0-9]+)', f_tag['href']).group(1)
+        thread = Thread(tid, fid, title, 0)
+        for p in range(1, npages):
+            if not self.get_post(thread, p):
+                print('[get_thread]', '{aborted}')
+                return None
 
-            thread = Thread(tid, fid, title, len(posts) - 1)
+        thread.nposts = len(thread.posts) - 1;
 
-            for post in posts:
-                lock_info = post.find('div', class_ = 'locked')
-                if (lock_info):
-                    continue
-                author = post.find('a', class_='xw1').get_text()
-                uid = re.search(r'uid=([0-9]+)', post.find('a', class_='xw1')['href']).group(1)
-                pid = re.search(r'post_([0-9]+)', post['id']).group(1)
-                time = post.find('em', id = re.compile(r'authorposton[0-9]')).string[4:]    # strip "发表于 "
+        print('[get_thread]', '{successed}', 'title:', thread.title, 'reply_num:', thread.nposts)
 
-                post.find('div', class_ = 'a_pr').decompose()   # 删除 分享栏
-                message = post.find('td', id = re.compile(r'postmessage_[0-9]+')).get_text()
+        thread.disp()
 
-                thread.posts.append(Post(pid, uid, author, time, message))
-
-            thread.disp()
-        elif fail_info:
-            print('[get_post]', '{failed}', fail_info.p.get_text())
-        else:
-            print('[get_post]', '{unknown error}')
-        return None
+        return thread
         
