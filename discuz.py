@@ -1,9 +1,12 @@
+# -*- encoding: UTF-8 -*-
+
 import re
 import json
 import requests
+import random
 
-from dzstruct import Post
-from dzstruct import Thread
+from time import sleep
+from dzstruct import Post, Thread
 from bs4 import BeautifulSoup
 
 class Discuz():
@@ -16,6 +19,7 @@ class Discuz():
     def __init__(self, url):
         self.url = url
         self.s = requests.session()
+        self.s.headers = {'User-Agent': 'Mozilla/5.0 (compatible; MSIE 8.0; Windows NT 6.0; Trident/4.0; Acoo Browser 1.98.744; .NET CLR 3.5.30729)'}
         self.logined = False
 
         f= open('./dzconfig.json')
@@ -29,9 +33,9 @@ class Discuz():
         t = fid_pattern.findall(response.text)
         if t:
             self.fid = dict((fname, fid) for fid, fname in t)
-            print('[get_fid]', '{successed}')
+            print('[discuz]', '[get_fid]', '{successed}')
         else:
-            print('[get_fid]', '{unknown error}')
+            print('[discuz]', '[get_fid]', '{unknown error}')
 
 
     def get_formhash(self, url):
@@ -58,21 +62,20 @@ class Discuz():
         fail_info = fail_pattern.search(response.text)
 
         if succ_info:
-            print('[login]','{successed}', succ_info.group(1))
+            print('[discuz]', '[login]','{successed}', succ_info.group(1))
             self.get_fid()
-            print(self.fid)
             self.logined = True
         elif fail_info:
-            print('[login]', '{failed}', fail_info.group(1))
+            print('[discuz]', '[login]', '{failed}', fail_info.group(1))
             self.logined = False
         else:
-            print('[login]', '{unknown error}')
+            print('[discuz]', '[login]', '{unknown error}')
             self.logined = False
         return self.logined
 
     def post(self, fname, subject, message):
         if not self.logined: 
-            print('[post]', 'not logged in')
+            print('[discuz]', '[post]', 'not logged in')
             return False
 
         tid = None
@@ -86,26 +89,26 @@ class Discuz():
         arg['message'] = message.encode('gb2312')
         arg['subject'] = subject.encode('gb2312')
 
-        print('[post]', 'fname:', fname, 'subject:', subject)
-        print('[post]', 'message:', message)
+        print('[discuz]', '[post]', 'fname:', fname, 'subject:', subject)
+        print('[discuz]', '[post]', 'message:', message)
 
         response = self.s.post(self.url + action, data = arg)
         fail_info = fail_pattern.search(response.text)
         succ_info = succ_pattern.search(response.url)
 
         if fail_info:
-            print('[post]', '{failed}', fail_info.group(1))
+            print('[discuz]', '[post]', '{failed}', fail_info.group(1))
         elif succ_info:
             tid = succ_info.group(1)
-            print('[post]', '{successed} tid:', succ_info.group(1))
+            print('[discuz]', '[post]', '{successed} tid:', succ_info.group(1))
         else:
-            print('[post]', '{unknown error}')
+            print('[discuz]', '[post]', '{unknown error}')
         return tid
 
 
     def reply(self, tid, message):
         if not self.logined: 
-            print('[post]', 'not logged in')
+            print('[discuz]', '[post]', 'not logged in')
             return False
 
         action = '/bbs/forum.php?mod=post&action=reply&tid=TID&replysubmit=yes'.replace('TID', tid)
@@ -123,16 +126,17 @@ class Discuz():
         succ_info = succ_pattern.search(response.text)
 
         if fail_info:
-            print('[reply]', '{failed}', fail_info.group(1))
+            print('[discuz]', '[reply]', '{failed}', fail_info.group(1))
         elif succ_info:
-            print('[reply]', '{successed} pid:', succ_info.group(1))
+            print('[discuz]', '[reply]', '{successed} pid:', succ_info.group(1))
         else:
-            print('[reply]', '{unknown error}')
+            print('[discuz]', '[reply]', '{unknown error}')
 
 
     def get_post(self, thread, page):
         action = 'bbs/forum.php?mod=viewthread&tid=TID&page=PAGE'.replace('TID', thread.tid).replace('PAGE', str(page))
 
+        sleep(random.random()*2)    # SLEEP
         response = self.s.get(self.url + action)
         html = BeautifulSoup(response.text, 'html.parser')
 
@@ -165,7 +169,7 @@ class Discuz():
 
                 lock_info = post.find('div', class_ = 'locked')
                 if (lock_info):
-                    print('[get_post]', '{warning}', 'page:', page, 'idx:', idx, 'post locked')
+                    print('[discuz]', '[get_post]', '{warning}', 'page:', page, 'idx:', idx, 'post locked')
                     message = '作者被禁止或删除 内容自动屏蔽'
                 else:
                     post.find('div', class_ = 'a_pr').decompose()   # 删除 分享栏
@@ -175,12 +179,12 @@ class Discuz():
                 thread.posts.append(Post(pid, uid, author, time, message))
 
             # print('')
-            print('[get_post]', '{successed}', 'page:', page, 'posts_num:', len(posts))
+            print('[discuz]', '[get_post]', '{successed}', 'page:', page, 'posts_num:', len(posts))
             return True
         elif fail_info:
-            print('[get_post]', '{failed}', 'page:', page, fail_info.p.get_text())
+            print('[discuz]', '[get_post]', '{failed}', 'page:', page, fail_info.p.get_text())
         else:
-            print('[get_post]', '{unknown error}', 'page:', page)
+            print('[discuz]', '[get_post]', '{unknown error}', 'page:', page)
 
         return False
 
@@ -194,25 +198,29 @@ class Discuz():
 
         fail_info = html.find(id = 'messagetext', class_ = 'alert_error')
         if fail_info:
-            print('[get_thread]', '{failed}', fail_info.p.get_text())
+            print('[discuz]', '[get_thread]', '{failed}', fail_info.p.get_text())
             return None
 
         title = html.find('span', id = 'thread_subject').string
         f_tag = html.find('a', href = re.compile(r'^forum.php\?mod=forumdisplay&fid=[0-9]+'))
         fid = re.search(r'fid=([0-9]+)', f_tag['href']).group(1)
-        npages = int(html.find('span', title = re.compile('共 [0-9]+ 页'))['title'][2:-2])
+
+        npages = html.find('span', title = re.compile('共 [0-9]+ 页'))
+        if npages:
+            npages = int(npages['title'][2:-2])
+        else:
+            npages = 1
 
         thread = Thread(tid, fid, title, 0)
-        for p in range(1, npages):
+        for p in range(1, npages + 1):
+            sleep(random.random()*10)   # SLEEP
             if not self.get_post(thread, p):
-                print('[get_thread]', '{aborted}')
+                print('[discuz]', '[get_thread]', '{aborted}')
                 return None
 
         thread.nposts = len(thread.posts) - 1;
 
-        print('[get_thread]', '{successed}', 'title:', thread.title, 'reply_num:', thread.nposts)
-
-        thread.disp()
+        print('[discuz]', '[get_thread]', '{successed}', 'title:', thread.title, 'reply_num:', thread.nposts)
 
         return thread
         
