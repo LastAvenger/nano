@@ -22,14 +22,13 @@ class Discuz():
         self.s.headers = {'User-Agent': 'Mozilla/5.0 (compatible; MSIE 8.0; Windows NT 6.0; Trident/4.0; Acoo Browser 1.98.744; .NET CLR 3.5.30729)'}
         self.logined = False
 
-        f= open('./dzconfig.json')
-        self.dzconfig = json.loads(f.read())
-        f.close()
+        with open('./dzconfig.json') as f:
+            self.dzconfig = json.loads(f.read())
 
 
     def get_fid(self):
         fid_pattern = re.compile(r'<dt><a href="forum\.php\?mod=forumdisplay&fid=([0-9]+)">(?u)(.+)</a>')
-        response = self.s.get(self.url + 'bbs/')
+        response = self.s.get(self.url + 'bbs/', timeout = 10)
         t = fid_pattern.findall(response.text)
         if t:
             self.fid = dict((fname, fid) for fid, fname in t)
@@ -40,7 +39,7 @@ class Discuz():
 
     def get_formhash(self, url):
         formhash_pattern = re.compile('formhash=([0-9a-zA-Z]+)')
-        response = self.s.get(url)
+        response = self.s.get(url, timeout = 10)
         formhash_info = formhash_pattern.search(response.text) 
         if formhash_info:
             return formhash_info.group(1)
@@ -57,7 +56,7 @@ class Discuz():
         arg['username'] = usr['username'].encode('gb2312')
         arg['password'] = usr['password'].encode('gb2312')
 
-        response = self.s.post(self.url + action, data = arg)
+        response = self.s.post(self.url + action, data = arg, timeout = 10)
         succ_info = succ_pattern.search(response.text)
         fail_info = fail_pattern.search(response.text)
 
@@ -92,7 +91,7 @@ class Discuz():
         print('[discuz]', '[post]', 'fname:', fname, 'subject:', subject)
         print('[discuz]', '[post]', 'message:', message)
 
-        response = self.s.post(self.url + action, data = arg)
+        response = self.s.post(self.url + action, data = arg, timeout = 10)
         fail_info = fail_pattern.search(response.text)
         succ_info = succ_pattern.search(response.url)
 
@@ -121,7 +120,7 @@ class Discuz():
         arg['formhash'] = self.get_formhash(self.url + fake)
         arg['message'] = message.encode('gb2312')
 
-        response = self.s.post(self.url + action, data = arg)
+        response = self.s.post(self.url + action, data = arg, timeout = 10)
         fail_info = fail_pattern.search(response.text)
         succ_info = succ_pattern.search(response.text)
 
@@ -137,7 +136,7 @@ class Discuz():
         action = 'bbs/forum.php?mod=viewthread&tid=TID&page=PAGE'.replace('TID', thread.tid).replace('PAGE', str(page))
 
         sleep(random.random()*2)    # SLEEP
-        response = self.s.get(self.url + action)
+        response = self.s.get(self.url + action, timeout = 10)
         html = BeautifulSoup(response.text, 'html.parser')
 
         fail_info = html.find(id = 'messagetext', class_ = 'alert_error')
@@ -192,7 +191,7 @@ class Discuz():
     def get_thread(self, tid):
         action = 'bbs/forum.php?mod=viewthread&tid=TID'.replace('TID', tid)
 
-        response = self.s.get(self.url + action)
+        response = self.s.get(self.url + action, timeout = 10)
         html = BeautifulSoup(response.text, 'html.parser')
         # html = BeautifulSoup(open('./test.html').read(), 'html.parser')
 
