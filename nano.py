@@ -13,9 +13,9 @@ nano is a bot used to catch&post Discuz BBS message
 
 Usage: nano.py [option] ...
 options:
-    -f, --fid       get and display content of thread specified by fid
-    -o, --output    save output to file
-    -f, --help      show this help message and exit
+    -f, --fid     <fid>     get and display content of thread specified by fid
+    -o, --output  <file>    save output to file
+    -f, --help              show this help message and exit
 
 Acting on Discuz! X3.2
 Create by Yuexuan Gu <lastavengers@outlook.com>''')
